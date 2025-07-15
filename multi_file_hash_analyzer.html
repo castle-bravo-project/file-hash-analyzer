@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-File Hash Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .drag-over {
+            border-color: #3b82f6 !important;
+            background-color: rgba(59, 130, 246, 0.1) !important;
+        }
+        
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold mb-2">Multi-File Hash Analyzer</h1>
+            <p class="text-gray-400">Upload multiple files to generate comprehensive hash reports</p>
+        </div>
+
+        <!-- Main Content Panel -->
+        <div class="bg-gray-800 rounded-2xl p-8 shadow-xl">
+            <!-- File Upload Area -->
+            <div id="upload-area" class="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center mb-8 transition-all duration-300 hover:border-blue-500 cursor-pointer">
+                <div id="upload-content">
+                    <svg class="mx-auto h-12 w-12 text-blue-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <h3 class="text-xl font-semibold mb-2">Drop files here or click to browse</h3>
+                    <p class="text-gray-400 mb-4">Select multiple files - any file type is supported</p>
+                    <button id="browse-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors duration-200">
+                        Browse Files
+                    </button>
+                </div>
+                <input type="file" id="file-input" class="hidden" accept="*" multiple>
+            </div>
+
+            <!-- File Queue -->
+            <div id="file-queue" class="hidden mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold">File Queue (<span id="queue-count">0</span>)</h2>
+                    <button id="clear-queue" class="text-gray-400 hover:text-white transition-colors">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="file-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="progress-container" class="hidden mb-8">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm text-gray-400">Processing files...</span>
+                    <span id="progress-text" class="text-sm text-gray-400">0 / 0</span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-2">
+                    <div id="progress-bar" class="progress-bar bg-blue-500 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="flex justify-center space-x-4 mb-8">
+                <button id="generate-btn" class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors duration-200 disabled:cursor-not-allowed" disabled>
+                    <span id="btn-text">Generate Hash Reports</span>
+                    <svg id="loading-spinner" class="hidden inline-block ml-2 h-4 w-4 animate-spin border-2 border-white border-b-blue-500 rounded-full"></svg>
+                </button>
+                <button id="export-btn" class="hidden bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors duration-200">
+                    <svg class="inline-block mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Download Report
+                </button>
+            </div>
+
+            <!-- Results Summary -->
+            <div id="results-summary" class="hidden mb-6">
+                <div class="bg-gray-700 rounded-lg p-4">
+                    <h3 class="font-semibold text-blue-400 mb-2">Processing Summary</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-400">Files Processed:</span>
+                            <span id="files-processed" class="ml-2 font-mono text-green-400"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-400">Total Size:</span>
+                            <span id="total-size" class="ml-2 font-mono text-blue-400"></span>
+                        </div>
+                        <div>
+                            <span class="text-gray-400">Processing Time:</span>
+                            <span id="processing-time" class="ml-2 font-mono text-yellow-400"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hash Report -->
+            <div id="hash-report" class="hidden space-y-6">
+                <div class="border-t border-gray-700 pt-6">
+                    <h2 class="text-2xl font-bold mb-6 text-center">Hash Reports</h2>
+                    <div id="report-content" class="space-y-6"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg hidden transform transition-all duration-300">
+            <span id="toast-message">Hash copied to clipboard!</span>
+        </div>
+    </div>
+
+    <script>
+        let fileQueue = [];
+        let processedFiles = [];
+        let isProcessing = false;
+        let startTime = null;
+
+        // DOM elements
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const browseBtn = document.getElementById('browse-btn');
+        const fileQueueDiv = document.getElementById('file-queue');
+        const fileList = document.getElementById('file-list');
+        const queueCount = document.getElementById('queue-count');
+        const clearQueueBtn = document.getElementById('clear-queue');
+        const generateBtn = document.getElementById('generate-btn');
+        const exportBtn = document.getElementById('export-btn');
+        const btnText = document.getElementById('btn-text');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const resultsSummary = document.getElementById('results-summary');
+        const hashReport = document.getElementById('hash-report');
+        const reportContent = document.getElementById('report-content');
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+
+        // Event listeners
+        browseBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+        clearQueueBtn.addEventListener('click', clearQueue);
+        generateBtn.addEventListener('click', generateAllHashes);
+        exportBtn.addEventListener('click', exportReport);
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('dragleave', handleDragLeave);
+        uploadArea.addEventListener('drop', handleDrop);
+
+        // Copy button functionality
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.copy-btn')) {
+                const hashValue = e.target.closest('.copy-btn').getAttribute('data-hash');
+                copyToClipboard(hashValue);
+            }
+        });
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadArea.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('drag-over');
+            const files = Array.from(e.dataTransfer.files);
+            addFilesToQueue(files);
+        }
+
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files);
+            addFilesToQueue(files);
+        }
+
+        function addFilesToQueue(files) {
+            files.forEach(file => {
+                const fileId = Date.now() + Math.random();
+                fileQueue.push({
+                    id: fileId,
+                    file: file,
+                    status: 'pending'
+                });
+            });
+            updateFileQueue();
+            updateUI();
+        }
+
+        function updateFileQueue() {
+            if (fileQueue.length === 0) {
+                fileQueueDiv.classList.add('hidden');
+                return;
+            }
+
+            fileQueueDiv.classList.remove('hidden');
+            queueCount.textContent = fileQueue.length;
+            
+            fileList.innerHTML = '';
+            fileQueue.forEach(item => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'flex items-center justify-between bg-gray-700 rounded-lg p-3';
+                fileItem.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-shrink-0">
+                            ${getStatusIcon(item.status)}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium truncate">${item.file.name}</p>
+                            <p class="text-sm text-gray-400">${formatFileSize(item.file.size)}</p>
+                        </div>
+                    </div>
+                    <button class="remove-file text-gray-400 hover:text-red-400 transition-colors" data-id="${item.id}">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                `;
+                fileList.appendChild(fileItem);
+            });
+
+            // Add remove file event listeners
+            document.querySelectorAll('.remove-file').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const fileId = parseInt(e.target.closest('button').getAttribute('data-id'));
+                    removeFileFromQueue(fileId);
+                });
+            });
+        }
+
+        function getStatusIcon(status) {
+            switch(status) {
+                case 'pending':
+                    return '<svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                case 'processing':
+                    return '<svg class="h-5 w-5 text-blue-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>';
+                case 'completed':
+                    return '<svg class="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+                case 'error':
+                    return '<svg class="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                default:
+                    return '';
+            }
+        }
+
+        function removeFileFromQueue(fileId) {
+            fileQueue = fileQueue.filter(item => item.id !== fileId);
+            updateFileQueue();
+            updateUI();
+        }
+
+        function clearQueue() {
+            fileQueue = [];
+            processedFiles = [];
+            updateFileQueue();
+            updateUI();
+            hashReport.classList.add('hidden');
+            resultsSummary.classList.add('hidden');
+            exportBtn.classList.add('hidden');
+        }
+
+        function updateUI() {
+            generateBtn.disabled = fileQueue.length === 0 || isProcessing;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        async function generateAllHashes() {
+            if (fileQueue.length === 0 || isProcessing) return;
+
+            isProcessing = true;
+            startTime = Date.now();
+            processedFiles = [];
+
+            // Show loading state
+            generateBtn.disabled = true;
+            btnText.textContent = 'Processing Files...';
+            loadingSpinner.classList.remove('hidden');
+            progressContainer.classList.remove('hidden');
+            exportBtn.classList.add('hidden');
+
+            let completed = 0;
+            const total = fileQueue.length;
+
+            for (let i = 0; i < fileQueue.length; i++) {
+                const item = fileQueue[i];
+                item.status = 'processing';
+                updateFileQueue();
+
+                try {
+                    const buffer = await item.file.arrayBuffer();
+                    const wordArray = CryptoJS.lib.WordArray.create(buffer);
+
+                    const hashResults = {
+                        md5: CryptoJS.MD5(wordArray).toString(),
+                        sha1: CryptoJS.SHA1(wordArray).toString(),
+                        sha256: CryptoJS.SHA256(wordArray).toString(),
+                        sha512: CryptoJS.SHA512(wordArray).toString()
+                    };
+
+                    processedFiles.push({
+                        ...item,
+                        hashes: hashResults,
+                        fileType: item.file.type || 'Unknown',
+                        lastModified: new Date(item.file.lastModified)
+                    });
+
+                    item.status = 'completed';
+                } catch (error) {
+                    console.error('Error processing file:', item.file.name, error);
+                    item.status = 'error';
+                }
+
+                completed++;
+                updateProgress(completed, total);
+                updateFileQueue();
+            }
+
+            // Processing complete
+            isProcessing = false;
+            displayResults();
+            updateSummary();
+            
+            // Reset UI
+            generateBtn.disabled = false;
+            btnText.textContent = 'Generate Hash Reports';
+            loadingSpinner.classList.add('hidden');
+            progressContainer.classList.add('hidden');
+            exportBtn.classList.remove('hidden');
+        }
+
+        function updateProgress(completed, total) {
+            const percentage = (completed / total) * 100;
+            progressBar.style.width = percentage + '%';
+            progressText.textContent = `${completed} / ${total}`;
+        }
+
+        function displayResults() {
+            if (processedFiles.length === 0) return;
+
+            reportContent.innerHTML = '';
+            
+            processedFiles.forEach((fileData, index) => {
+                if (fileData.status !== 'completed') return;
+
+                const fileReport = document.createElement('div');
+                fileReport.className = 'bg-gray-700 rounded-lg p-6 mb-6';
+                fileReport.innerHTML = `
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-blue-400">${fileData.file.name}</h3>
+                        <span class="text-sm text-gray-400">${formatFileSize(fileData.file.size)}</span>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <!-- MD5 -->
+                        <div class="bg-gray-800 rounded-lg p-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-blue-300">MD5</span>
+                                <button class="copy-btn text-gray-400 hover:text-blue-400 transition-colors" data-hash="${fileData.hashes.md5}">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <p class="font-mono text-xs text-gray-300 break-all">${fileData.hashes.md5}</p>
+                        </div>
+
+                        <!-- SHA-1 -->
+                        <div class="bg-gray-800 rounded-lg p-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-blue-300">SHA-1</span>
+                                <button class="copy-btn text-gray-400 hover:text-blue-400 transition-colors" data-hash="${fileData.hashes.sha1}">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <p class="font-mono text-xs text-gray-300 break-all">${fileData.hashes.sha1}</p>
+                        </div>
+
+                        <!-- SHA-256 -->
+                        <div class="bg-gray-800 rounded-lg p-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-blue-300">SHA-256</span>
+                                <button class="copy-btn text-gray-400 hover:text-blue-400 transition-colors" data-hash="${fileData.hashes.sha256}">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <p class="font-mono text-xs text-gray-300 break-all">${fileData.hashes.sha256}</p>
+                        </div>
+
+                        <!-- SHA-512 -->
+                        <div class="bg-gray-800 rounded-lg p-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-blue-300">SHA-512</span>
+                                <button class="copy-btn text-gray-400 hover:text-blue-400 transition-colors" data-hash="${fileData.hashes.sha512}">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <p class="font-mono text-xs text-gray-300 break-all">${fileData.hashes.sha512}</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 rounded-lg p-3">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                                <span class="text-gray-400">Type:</span>
+                                <span class="ml-2 font-mono">${fileData.fileType}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400">Size:</span>
+                                <span class="ml-2 font-mono">${formatFileSize(fileData.file.size)}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400">Modified:</span>
+                                <span class="ml-2 font-mono">${fileData.lastModified.toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                reportContent.appendChild(fileReport);
+            });
+
+            hashReport.classList.remove('hidden');
+        }
+
+        function updateSummary() {
+            const totalSize = processedFiles.reduce((sum, file) => sum + file.file.size, 0);
+            const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
+            
+            document.getElementById('files-processed').textContent = processedFiles.length;
+            document.getElementById('total-size').textContent = formatFileSize(totalSize);
+            document.getElementById('processing-time').textContent = processingTime + 's';
+            
+            resultsSummary.classList.remove('hidden');
+        }
+
+        function exportReport() {
+            if (processedFiles.length === 0) return;
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const reportData = {
+                generatedAt: new Date().toISOString(),
+                summary: {
+                    totalFiles: processedFiles.length,
+                    totalSize: processedFiles.reduce((sum, file) => sum + file.file.size, 0),
+                    processingTime: ((Date.now() - startTime) / 1000).toFixed(2) + 's'
+                },
+                files: processedFiles.map(fileData => ({
+                    filename: fileData.file.name,
+                    size: fileData.file.size,
+                    type: fileData.fileType,
+                    lastModified: fileData.lastModified.toISOString(),
+                    hashes: fileData.hashes
+                }))
+            };
+
+            // Create and download JSON report
+            const jsonBlob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+            const jsonUrl = URL.createObjectURL(jsonBlob);
+            const jsonLink = document.createElement('a');
+            jsonLink.href = jsonUrl;
+            jsonLink.download = `hash-report-${timestamp}.json`;
+            jsonLink.click();
+            URL.revokeObjectURL(jsonUrl);
+
+            // Create and download CSV report
+            const csvContent = generateCSV(processedFiles);
+            const csvBlob = new Blob([csvContent], { type: 'text/csv' });
+            const csvUrl = URL.createObjectURL(csvBlob);
+            const csvLink = document.createElement('a');
+            csvLink.href = csvUrl;
+            csvLink.download = `hash-report-${timestamp}.csv`;
+            csvLink.click();
+            URL.revokeObjectURL(csvUrl);
+
+            showToast('Reports downloaded successfully!');
+        }
+
+        function generateCSV(files) {
+            const headers = ['Filename', 'Size (bytes)', 'Type', 'Last Modified', 'MD5', 'SHA-1', 'SHA-256', 'SHA-512'];
+            const rows = files.map(fileData => [
+                fileData.file.name,
+                fileData.file.size,
+                fileData.fileType,
+                fileData.lastModified.toISOString(),
+                fileData.hashes.md5,
+                fileData.hashes.sha1,
+                fileData.hashes.sha256,
+                fileData.hashes.sha512
+            ]);
+
+            return [headers, ...rows].map(row => 
+                row.map(field => `"${field}"`).join(',')
+            ).join('\n');
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Hash copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                showToast('Failed to copy hash', 'error');
+            });
+        }
+
+        function showToast(message, type = 'success') {
+            toastMessage.textContent = message;
+            toast.className = `fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg transform transition-all duration-300 ${
+                type === 'error' ? 'bg-red-600' : 'bg-green-600'
+            } text-white`;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
