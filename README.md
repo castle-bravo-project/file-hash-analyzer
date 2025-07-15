@@ -1,4 +1,4 @@
-# File Hash Analyzer [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](link) ![Static Badge](https://img.shields.io/badge/Validation-Pending-red) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+# File Hash Analyzer [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](link) ![Static Badge](https://img.shields.io/badge/Validation-Pending-red) [![License](https://img.shields.io/badge/license-GPLv3.0-blue)](LICENSE)
 
 A modern, web-based file hash analyzer that generates comprehensive cryptographic hash reports for any file type. Built with a clean, responsive interface and powerful client-side processing.
 
